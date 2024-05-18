@@ -31,7 +31,7 @@ fetch("data/Cards.json").then((req) => req.json()).then((cards) => {
             card.Fusions.forEach((fusion) => {
                 const id = fusion._result;
                 resultsList[id] = resultsList[id] || [];
-                resultsList[id].push(card.Id);
+                resultsList[id].push(fusion.card1, fusion.card2);
             });
         }
     });
