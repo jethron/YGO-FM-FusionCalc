@@ -1,28 +1,58 @@
-let nameInput = document.getElementById("cardname");
-let outputLeft = document.getElementById("output-area-left");
-let outputRight = document.getElementById("output-area-right");
-let outputCard = document.getElementById("outputcard");
-let searchMessage = document.getElementById("search-msg");
-let resetBtn = document.getElementById("reset-btn");
-let searchResultsBtn = document.getElementById("search-results-btn");
-let searchNameBtn = document.getElementById("search-name-btn");
+const nameInput = document.getElementById("cardname");
+const outputLeft = document.getElementById("output-area-left");
+const outputRight = document.getElementById("output-area-right");
+const outputCard = document.getElementById("outputcard");
+const searchMessage = document.getElementById("search-msg");
+const resetBtn = document.getElementById("reset-btn");
+const searchResultsBtn = document.getElementById("search-results-btn");
+const searchNameBtn = document.getElementById("search-name-btn");
+
+const cardsById = {};
+const cardsByName = {};
+const equipsList = [];
+const resultsList = [];
+
+const cardNameCompletion = new Awesomplete(nameInput, {
+    autoFirst: true, // The first item in the list is selected
+});
+
+fetch("data/Cards.json").then((req) => req.json()).then((cards) => {
+    cards.forEach((card) => {
+        cardsById[card.Id] = card;
+        cardsByName[card.Name.toLowerCase()] = card;
+
+        if (card.Equip) {
+            card.Equip.forEach((id) => {
+                equipsList[id] = equipsList[id] || [];
+                equipsList[id].push(card.Id);
+            });
+        }
+        if (card.Fusions) {
+            card.Fusions.forEach((fusion) => {
+                const id = fusion._result;
+                resultsList[id] = resultsList[id] || [];
+                resultsList[id].push(card.Id);
+            });
+        }
+    });
+
+    cardNameCompletion.list = cards.map((card) => card.Name);
+});
 
 // FUNCTIONS
 
 function resultsClear() {
-    outputLeft.innerHTML = "";
-    outputRight.innerHTML = "";
-    outputCard.innerHTML = "";
-    searchMessage.innerHTML = "";
+    outputLeft.replaceChildren();
+    outputRight.replaceChildren();
+    outputCard.replaceChildren();
+    searchMessage.replaceChildren();
 }
 
 function createDangerMessage(input) {
     if (!input) {
-        let firstMessage = `<div class="alert alert-danger" role="alert">Please enter a search term</div>`;
-        return firstMessage;
+        return `<div class="alert alert-danger" role="alert">Please enter a search term</div>`;
     } else {
-        let secondMessage = `<div class="alert alert-danger" role="alert">No card for ${input} found</div>`;
-        return secondMessage;
+        return `<div class="alert alert-danger" role="alert">No card for ${input} found</div>`;
     }
 }
 
@@ -53,20 +83,15 @@ function createSideCard(card) {
     }
 }
 
-// Initialize awesomplete
-var cardNameCompletion = new Awesomplete(nameInput, {
-    list: card_db()
-        .get()
-        .map((c) => c.Name), // list is all the cards in the DB
-    autoFirst: true, // The first item in the list is selected
-    filter: Awesomplete.FILTER_STARTSWITH, // case insensitive from start of word
+nameInput.addEventListener("change", function () {
+    if (cardNameCompletion) {
+        cardNameCompletion.select(); // select the currently highlighted item, e.g. if user tabs
+        resultsClear();
+        searchByName();
+    }
 });
-$("#cardname").on("change", function () {
-    cardNameCompletion.select(); // select the currently highlighted item, e.g. if user tabs
-    resultsClear();
-    searchByName();
-});
-$("#cardname").on("awesomplete-selectcomplete", function () {
+
+nameInput.addEventListener("awesomplete-selectcomplete", function () {
     resultsClear();
     searchByName();
 });
@@ -86,21 +111,12 @@ function fusesToHTML(fuselist) {
     });
 }
 
-// Returns the card with a given ID
-function getCardById(id) {
-    var card = card_db({ Id: id }).first();
-    if (!card) {
-        return null;
-    }
-    return card;
-}
-
 function searchByName() {
-    if (nameInput.value === "") {
+    if (!nameInput.value) {
         searchMessage.innerHTML = createDangerMessage();
         return;
     } else {
-        let card = card_db({ Name: { isnocase: nameInput.value } }).first();
+        let card = cardsByName[nameInput.value.toLowerCase()]
         if (!card) {
             searchMessage.innerHTML = createDangerMessage(nameInput.value);
             return;
@@ -111,10 +127,10 @@ function searchByName() {
             // Get the list of fusions and equips
 
             var fuses = card.Fusions.map((i) => {
-                return { card1: card, card2: getCardById(i._card2), result: getCardById(i._result) };
+                return { card1: card, card2: cardsById[i._card2], result: cardsById[i._result] };
             });
             var equips = equipsList[card.Id].map((e) => {
-                return { card1: card, card2: getCardById(e) };
+                return { card1: card, card2: cardsById[e] };
             });
 
             outputRight.innerHTML = "<h2 class='text-center my-4'>Can be equiped</h2>";
@@ -127,11 +143,11 @@ function searchByName() {
 }
 
 function searchForResult() {
-    if (nameInput.value === "") {
+    if (!nameInput.value) {
         searchMessage.innerHTML = createDangerMessage();
         return;
     } else {
-        var card = card_db({ Name: { isnocase: nameInput.value } }).first();
+        var card = cardsByName[nameInput.value.toLowerCase()];
         if (!card) {
             searchMessage.innerHTML = createDangerMessage(nameInput.value);
             return;
@@ -141,7 +157,7 @@ function searchForResult() {
 
             if (resultsList[card.Id].length > 0) {
                 var results = resultsList[card.Id].map((f) => {
-                    return { card1: getCardById(f.card1), card2: getCardById(f.card2) };
+                    return { card1: cardsById[f.card1], card2: cardsById[f.card2] };
                 });
                 outputLeft.innerHTML = "<h2 class='text-center my-4'>Fusions</h2>";
                 outputLeft.innerHTML += fusesToHTML(results);
@@ -150,19 +166,23 @@ function searchForResult() {
     }
 }
 
-searchNameBtn.onclick = function () {
-    cardNameCompletion.select(); // select the currently highlighted item
-    resultsClear();
-    searchByName();
-};
+searchNameBtn.addEventListener("click", function () {
+    if (cardNameCompletion) {
+        cardNameCompletion.select(); // select the currently highlighted item
+        resultsClear();
+        searchByName();
+    }
+});
 
-searchResultsBtn.onclick = function () {
-    cardNameCompletion.select(); // select the currently highlighted item
-    resultsClear();
-    searchForResult();
-};
+searchResultsBtn.addEventListener("click", function () {
+    if (cardNameCompletion) {
+        cardNameCompletion.select(); // select the currently highlighted item
+        resultsClear();
+        searchForResult();
+    }
+});
 
-resetBtn.onclick = function () {
+resetBtn.addEventListener("click", function () {
     resultsClear();
     nameInput.value = "";
-};
+});
