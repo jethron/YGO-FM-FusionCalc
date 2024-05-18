@@ -105,7 +105,7 @@ function findFusions() {
         hand.forEach((card1, i, a) => {
             if (!card1) return;
 
-            const card1Equips = equipsList[card1.Id];
+            const card1Equips = equipsList[card1.Id] || [];
             const card1Fuses = card1.Fusions || [];
 
             const rest = a.slice(i + 1);
